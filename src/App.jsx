@@ -8,8 +8,8 @@ import { createClient } from "@supabase/supabase-js";
 //  - SUPABASE_ANON_KEY:  a chave "anon public" (longa, começa com "eyJ...")
 //  Esta chave pode ficar no código do site — ela é pública por design.
 // ============================================================
-const SUPABASE_URL = "COLE_SUA_URL_AQUI";
-const SUPABASE_ANON_KEY = "COLE_SUA_ANON_KEY_AQUI";
+   const SUPABASE_URL = "https://tmzofzsmqptvawghovlk.supabase.co";
+   const SUPABASE_ANON_KEY = "sb_publishable_PJpXOW4xI0Gl9Ylq9WmefQ_H0KG66ol";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
