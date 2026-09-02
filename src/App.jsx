@@ -101,6 +101,10 @@ export default function App() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState(null);
   const [faseAberta, setFaseAberta] = useState(FASES[0].id);
+  const [mostrarDocumentos, setMostrarDocumentos] = useState(false);
+  const [documentos, setDocumentos] = useState([]);
+  const [novoDocNome, setNovoDocNome] = useState("");
+  const [novoDocLink, setNovoDocLink] = useState("");
   const importRef = useRef(null);
 
   // ---- Carga inicial + tempo real ----
@@ -112,6 +116,8 @@ export default function App() {
         if (e1) throw e1;
         const { data: prog, error: e2 } = await supabase.from("progresso").select("*");
         if (e2) throw e2;
+        const { data: docs, error: e3 } = await supabase.from("documentos").select("*").order("criado_em");
+        if (e3) throw e3;
         if (!ativo) return;
         setAlunos(als || []);
         const mapa = {};
@@ -119,6 +125,7 @@ export default function App() {
           (mapa[r.aluno_id] ??= new Set()).add(r.tarefa_id);
         });
         setProgresso(mapa);
+        setDocumentos(docs || []);
       } catch (err) {
         setErro(traduzErro(err));
       } finally {
@@ -131,6 +138,7 @@ export default function App() {
       .channel("aurum-live")
       .on("postgres_changes", { event: "*", schema: "public", table: "alunos" }, recarregarAlunos)
       .on("postgres_changes", { event: "*", schema: "public", table: "progresso" }, aplicarProgresso)
+      .on("postgres_changes", { event: "*", schema: "public", table: "documentos" }, recarregarDocumentos)
       .subscribe();
 
     return () => { ativo = false; supabase.removeChannel(canal); };
@@ -140,6 +148,11 @@ export default function App() {
   async function recarregarAlunos() {
     const { data } = await supabase.from("alunos").select("*").order("nome");
     setAlunos(data || []);
+  }
+
+  async function recarregarDocumentos() {
+    const { data } = await supabase.from("documentos").select("*").order("criado_em");
+    setDocumentos(data || []);
   }
 
   function aplicarProgresso(payload) {
@@ -195,6 +208,27 @@ export default function App() {
   };
 
   const contarFeitas = (id) => (progresso[id]?.size) || 0;
+
+  const addDocumento = async () => {
+    const nome = novoDocNome.trim();
+    const link = novoDocLink.trim();
+    if (!nome || !link) return;
+    if (!/^https?:\/\//i.test(link)) {
+      setErro("O link do documento precisa começar com http:// ou https://");
+      return;
+    }
+    setNovoDocNome("");
+    setNovoDocLink("");
+    const { data, error } = await supabase.from("documentos").insert({ nome, link }).select().single();
+    if (error) return setErro(traduzErro(error));
+    setDocumentos((d) => [...d, data]);
+  };
+
+  const removerDocumento = async (id) => {
+    const { error } = await supabase.from("documentos").delete().eq("id", id);
+    if (error) return setErro(traduzErro(error));
+    setDocumentos((d) => d.filter((x) => x.id !== id));
+  };
 
   // A fase "atual" de um aluno é a primeira fase que ele ainda não completou.
   // Se completou todas, ele está em "concluído".
@@ -267,16 +301,28 @@ export default function App() {
         <aside style={{ borderRight: `1px solid ${C.line}`, background: C.panel, display: "flex", flexDirection: "column", maxHeight: "calc(100vh - 76px)" }}>
           <div style={{ padding: "16px 16px 10px" }}>
             <button
-              onClick={() => setSelId(null)}
+              onClick={() => { setMostrarDocumentos(false); setSelId(null); }}
               style={{
-                width: "100%", textAlign: "left", padding: "9px 12px", borderRadius: 8, marginBottom: 10,
-                border: `1px solid ${!selId ? C.gold : C.line}`,
-                background: !selId ? C.goldSoft : "transparent",
-                color: !selId ? C.gold : C.sub,
+                width: "100%", textAlign: "left", padding: "9px 12px", borderRadius: 8, marginBottom: 6,
+                border: `1px solid ${!mostrarDocumentos && !selId ? C.gold : C.line}`,
+                background: !mostrarDocumentos && !selId ? C.goldSoft : "transparent",
+                color: !mostrarDocumentos && !selId ? C.gold : C.sub,
                 fontSize: 13.5, fontWeight: 600,
               }}
             >
               📊 Visão geral
+            </button>
+            <button
+              onClick={() => setMostrarDocumentos(true)}
+              style={{
+                width: "100%", textAlign: "left", padding: "9px 12px", borderRadius: 8, marginBottom: 10,
+                border: `1px solid ${mostrarDocumentos ? C.gold : C.line}`,
+                background: mostrarDocumentos ? C.goldSoft : "transparent",
+                color: mostrarDocumentos ? C.gold : C.sub,
+                fontSize: 13.5, fontWeight: 600,
+              }}
+            >
+              📄 Documentos
             </button>
             <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar aluno…" style={inp} />
           </div>
@@ -289,9 +335,9 @@ export default function App() {
             )}
             {alunosFiltrados.map((a) => {
               const pct = Math.round((contarFeitas(a.id) / TOTAL_TAREFAS) * 100);
-              const ativo = a.id === selId;
+              const ativo = !mostrarDocumentos && a.id === selId;
               return (
-                <div key={a.id} className="row-al" onClick={() => setSelId(a.id)}
+                <div key={a.id} className="row-al" onClick={() => { setMostrarDocumentos(false); setSelId(a.id); }}
                   style={{ padding: "10px 12px", borderRadius: 8, marginBottom: 3, cursor: "pointer", background: ativo ? C.panel2 : "transparent", borderLeft: `3px solid ${ativo ? C.gold : "transparent"}` }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                     <span style={{ fontSize: 14, fontWeight: ativo ? 600 : 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.nome}</span>
@@ -314,7 +360,44 @@ export default function App() {
         </aside>
 
         <main className="aurum-scroll" style={{ overflowY: "auto", maxHeight: "calc(100vh - 76px)", padding: "24px 28px 60px" }}>
-          {!selecionado && (
+          {mostrarDocumentos && (
+            <div>
+              <div style={{ marginBottom: 22 }}>
+                <h2 style={{ margin: 0, fontSize: 26, fontWeight: 700, letterSpacing: -0.5 }}>Documentos</h2>
+                <p style={{ margin: "4px 0 0", color: C.sub, fontSize: 13.5 }}>
+                  {documentos.length} documento{documentos.length === 1 ? "" : "s"} de referência, iguais para todos os alunos
+                </p>
+              </div>
+
+              <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, background: C.panel, overflow: "hidden", marginBottom: 16 }}>
+                {documentos.length === 0 && (
+                  <p style={{ padding: 20, color: C.sub, fontSize: 13.5 }}>Nenhum documento ainda. Adicione um abaixo.</p>
+                )}
+                {documentos.map((doc) => (
+                  <div key={doc.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "14px 18px", borderBottom: `1px solid ${C.panel2}`, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 14.5, fontWeight: 500 }}>{doc.nome}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 16, flexShrink: 0 }}>
+                      <a href={doc.link} target="_blank" rel="noopener noreferrer" className="lnk" style={{ fontSize: 13.5, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        👉 Clique aqui para acessar
+                      </a>
+                      <button onClick={() => removerDocumento(doc.id)} style={{ background: "transparent", border: "none", color: C.sub, fontSize: 12 }}>remover</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, background: C.panel, padding: 16 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: C.sub }}>Adicionar documento</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <input value={novoDocNome} onChange={(e) => setNovoDocNome(e.target.value)} placeholder="Nome ou função do documento" style={{ ...inp, flex: "1 1 220px" }} />
+                  <input value={novoDocLink} onChange={(e) => setNovoDocLink(e.target.value)} placeholder="https://…" style={{ ...inp, flex: "1 1 220px" }} />
+                  <button onClick={addDocumento} style={btnGold}>Adicionar</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!mostrarDocumentos && !selecionado && (
             <div>
               <div style={{ marginBottom: 22 }}>
                 <h2 style={{ margin: 0, fontSize: 26, fontWeight: 700, letterSpacing: -0.5 }}>Visão geral</h2>
@@ -372,7 +455,7 @@ export default function App() {
               )}
             </div>
           )}
-          {selecionado && (
+          {!mostrarDocumentos && selecionado && (
             <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12, marginBottom: 8 }}>
                 <div>
