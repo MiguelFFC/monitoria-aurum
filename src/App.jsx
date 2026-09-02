@@ -8,8 +8,8 @@ import { createClient } from "@supabase/supabase-js";
 //  - SUPABASE_ANON_KEY:  a chave "anon public" (longa, começa com "eyJ...")
 //  Esta chave pode ficar no código do site — ela é pública por design.
 // ============================================================
-   const SUPABASE_URL = "https://tmzofzsmqptvawghovlk.supabase.co";
-   const SUPABASE_ANON_KEY = "sb_publishable_PJpXOW4xI0Gl9Ylq9WmefQ_H0KG66ol";
+const SUPABASE_URL = "https://tmzofzsmqptvawghovlk.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_PJpXOW4xI0Gl9Ylq9WmefQ_H0KG66ol";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -119,7 +119,6 @@ export default function App() {
           (mapa[r.aluno_id] ??= new Set()).add(r.tarefa_id);
         });
         setProgresso(mapa);
-        if (als?.length) setSelId(als[0].id);
       } catch (err) {
         setErro(traduzErro(err));
       } finally {
@@ -197,6 +196,35 @@ export default function App() {
 
   const contarFeitas = (id) => (progresso[id]?.size) || 0;
 
+  // A fase "atual" de um aluno é a primeira fase que ele ainda não completou.
+  // Se completou todas, ele está em "concluído".
+  const faseAtualDoAluno = (alunoId) => {
+    for (const fase of FASES) {
+      const feitas = fase.tarefas.filter((t) => progresso[alunoId]?.has(t.id)).length;
+      if (feitas < fase.tarefas.length) return fase.id;
+    }
+    return "concluido";
+  };
+
+  const distribuicao = useMemo(() => {
+    const contagem = {};
+    FASES.forEach((f) => { contagem[f.id] = 0; });
+    contagem.concluido = 0;
+    alunos.forEach((a) => {
+      const fase = faseAtualDoAluno(a.id);
+      contagem[fase] = (contagem[fase] || 0) + 1;
+    });
+    return contagem;
+    // eslint-disable-next-line
+  }, [alunos, progresso]);
+
+  const mediaGeral = useMemo(() => {
+    if (!alunos.length || !TOTAL_TAREFAS) return 0;
+    const soma = alunos.reduce((acc, a) => acc + contarFeitas(a.id), 0);
+    return Math.round((soma / (alunos.length * TOTAL_TAREFAS)) * 100);
+    // eslint-disable-next-line
+  }, [alunos, progresso]);
+
   const alunosFiltrados = useMemo(() => {
     const q = busca.trim().toLowerCase();
     return q ? alunos.filter((a) => a.nome.toLowerCase().includes(q)) : alunos;
@@ -238,6 +266,18 @@ export default function App() {
       <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", minHeight: "calc(100vh - 76px)" }}>
         <aside style={{ borderRight: `1px solid ${C.line}`, background: C.panel, display: "flex", flexDirection: "column", maxHeight: "calc(100vh - 76px)" }}>
           <div style={{ padding: "16px 16px 10px" }}>
+            <button
+              onClick={() => setSelId(null)}
+              style={{
+                width: "100%", textAlign: "left", padding: "9px 12px", borderRadius: 8, marginBottom: 10,
+                border: `1px solid ${!selId ? C.gold : C.line}`,
+                background: !selId ? C.goldSoft : "transparent",
+                color: !selId ? C.gold : C.sub,
+                fontSize: 13.5, fontWeight: 600,
+              }}
+            >
+              📊 Visão geral
+            </button>
             <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar aluno…" style={inp} />
           </div>
           <div className="aurum-scroll" style={{ overflowY: "auto", flex: 1, padding: "0 8px" }}>
@@ -274,7 +314,64 @@ export default function App() {
         </aside>
 
         <main className="aurum-scroll" style={{ overflowY: "auto", maxHeight: "calc(100vh - 76px)", padding: "24px 28px 60px" }}>
-          {!selecionado && <div style={{ color: C.sub, marginTop: 40, fontSize: 14 }}>Selecione um aluno à esquerda para ver o checklist dele.</div>}
+          {!selecionado && (
+            <div>
+              <div style={{ marginBottom: 22 }}>
+                <h2 style={{ margin: 0, fontSize: 26, fontWeight: 700, letterSpacing: -0.5 }}>Visão geral</h2>
+                <p style={{ margin: "4px 0 0", color: C.sub, fontSize: 13.5 }}>
+                  {alunos.length} aluno{alunos.length === 1 ? "" : "s"}
+                  {alunos.length > 0 && <> · {mediaGeral}% de progresso médio</>}
+                </p>
+              </div>
+
+              {alunos.length === 0 ? (
+                <p style={{ color: C.sub, fontSize: 13.5 }}>Adicione alunos na barra lateral para ver as estatísticas aqui.</p>
+              ) : (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12, marginBottom: 8 }}>
+                    {FASES.map((fase) => {
+                      const [rotulo, descricao] = fase.titulo.split(" — ");
+                      const qtd = distribuicao[fase.id] || 0;
+                      const pct = alunos.length ? Math.round((qtd / alunos.length) * 100) : 0;
+                      return (
+                        <div key={fase.id} style={{ border: `1px solid ${C.line}`, borderRadius: 12, background: C.panel, padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+                          <div>
+                            <div style={{ fontSize: 11.5, color: C.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>{rotulo}</div>
+                            {descricao && <div style={{ fontSize: 12, color: C.sub, marginTop: 1 }}>{descricao}</div>}
+                          </div>
+                          <div style={{ fontSize: 28, fontWeight: 700, color: C.gold }}>{pct}%</div>
+                          <div style={{ fontSize: 12, color: C.sub }}>{qtd} aluno{qtd === 1 ? "" : "s"} parado{qtd === 1 ? "" : "s"} aqui</div>
+                          <div style={{ height: 5, background: C.panel2, borderRadius: 5, overflow: "hidden", marginTop: 2 }}>
+                            <div style={{ height: "100%", width: `${pct}%`, background: C.gold, borderRadius: 5 }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {(() => {
+                      const qtd = distribuicao.concluido || 0;
+                      const pct = alunos.length ? Math.round((qtd / alunos.length) * 100) : 0;
+                      return (
+                        <div style={{ border: `1px solid #2f5c46`, borderRadius: 12, background: C.greenSoft, padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+                          <div>
+                            <div style={{ fontSize: 11.5, color: C.green, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Concluído</div>
+                            <div style={{ fontSize: 12, color: C.green, marginTop: 1, opacity: 0.85 }}>Todas as fases completas</div>
+                          </div>
+                          <div style={{ fontSize: 28, fontWeight: 700, color: C.green }}>{pct}%</div>
+                          <div style={{ fontSize: 12, color: C.green, opacity: 0.85 }}>{qtd} aluno{qtd === 1 ? "" : "s"} finalizado{qtd === 1 ? "" : "s"}</div>
+                          <div style={{ height: 5, background: "#0f2019", borderRadius: 5, overflow: "hidden", marginTop: 2 }}>
+                            <div style={{ height: "100%", width: `${pct}%`, background: C.green, borderRadius: 5 }} />
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  <p style={{ color: C.sub, fontSize: 12.5, marginTop: 18 }}>Selecione um aluno à esquerda para ver o checklist individual dele.</p>
+                </>
+              )}
+            </div>
+          )}
           {selecionado && (
             <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12, marginBottom: 8 }}>
