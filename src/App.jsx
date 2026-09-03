@@ -25,7 +25,16 @@ const FASES = [
       { id: "f0-t1", texto: "Identificar o aluno como novo, iniciar o acompanhamento e criar a pasta compartilhada", link: "https://drive.google.com/drive/folders/1BBCkZZC5SdfQXu3-fALg1-ShXNUTQTQr?usp=sharing" },
       { id: "f0-t2", texto: "Mapear em qual fase da jornada o aluno está (palestra ou Palestra ATM) antes de qualquer contato" },
       { id: "f0-t3", texto: "Agendar e confirmar a 1ª reunião com a coordenação do Aurum (entender o sistema)" },
-      { id: "f0-t4", texto: "Agendar e confirmar a 2ª reunião com o ferramenteiro (primeira etapa)", link: "https://docs.google.com/document/d/1o7Z4L_CjCAtKpXLJTyHsU-VWybAMFEHNEcARQfhK-2M/edit?tab=t.0" },
+      { id: "f0-t4", texto: "Agendar e confirmar a 2ª reunião com o ferramenteiro (primeira etapa)", link: "https://docs.google.com/document/d/1o7Z4L_CjCAtKpXLJTyHsU-VWybAMFEHNEcARQfhK-2M/edit?tab=t.0",
+        subtarefas: [
+          { id: "f0-t4-s1", texto: "Criar conta na Builderall" },
+          { id: "f0-t4-s2", texto: "Criar domínio no Registro.br", link: "https://registro.br" },
+          { id: "f0-t4-s3", texto: "Criar conta na Hotmart" },
+          { id: "f0-t4-s4", texto: "Criar produto na Hotmart (Sessão de Viabilidade)" },
+          { id: "f0-t4-s5", texto: "Criar o StreamYard" },
+          { id: "f0-t4-s6", texto: "Conectar a conta do StreamYard ao YouTube" },
+        ],
+      },
       { id: "f0-t5", texto: "Solicitar ao aluno uma foto institucional para o site", link: "https://drive.google.com/drive/folders/15guJI39D-Ozk4IZvA1SCk0pXPgSnJrSi?usp=sharing" },
       { id: "f0-t6", texto: "Solicitar a gravação dos 2 vídeos da carta de venda (prazo 7 dias); se precisar de edição, seguir o protocolo", link: "https://docs.google.com/spreadsheets/d/1AdHXZhFCV01GX69ZJg6qqQzYbfLhQddEgDo3fyBAX9k/edit?usp=sharing" },
       { id: "f0-t7", texto: "Com o vídeo pronto, enviar o documento para o webdesigner", link: "https://docs.google.com/document/d/1HHorp6ufte6b3OAfzxC4uPMvZu1kU4eJ/edit?usp=sharing&ouid=108163080390072071680&rtpof=true&sd=true" },
@@ -37,7 +46,15 @@ const FASES = [
     titulo: "Fase 1 — Configuração técnica",
     quando: "Builderall, API e Facebook",
     tarefas: [
-      { id: "f1-t1", texto: "Agendar e confirmar a 4ª reunião com o ferramenteiro sobre API", link: "https://docs.google.com/document/d/1o7Z4L_CjCAtKpXLJTyHsU-VWybAMFEHNEcARQfhK-2M/edit?tab=t.pab13t56jn5k" },
+      { id: "f1-t1", texto: "Agendar e confirmar a 4ª reunião com o ferramenteiro sobre API", link: "https://docs.google.com/document/d/1o7Z4L_CjCAtKpXLJTyHsU-VWybAMFEHNEcARQfhK-2M/edit?tab=t.pab13t56jn5k",
+        subtarefas: [
+          { id: "f1-t1-s1", texto: "Criar produto na Hotmart (Croqui e Holding)" },
+          { id: "f1-t1-s2", texto: "Disparo de mensagens de e-mail para a lista" },
+          { id: "f1-t1-s3", texto: "Disparo de mensagens via API do WhatsApp" },
+          { id: "f1-t1-s4", texto: "Implementação da API do WhatsApp" },
+          { id: "f1-t1-s5", texto: "Criar conta no ManyChat" },
+        ],
+      },
     ],
   },
   {
@@ -84,7 +101,11 @@ const FASES = [
   },
 ];
 
-const TOTAL_TAREFAS = FASES.reduce((n, f) => n + f.tarefas.length, 0);
+// Conta uma tarefa + suas subtarefas (se houver)
+const contarItens = (tarefas) =>
+  tarefas.reduce((n, t) => n + 1 + (t.subtarefas?.length || 0), 0);
+
+const TOTAL_TAREFAS = FASES.reduce((n, f) => n + contarItens(f.tarefas), 0);
 
 const C = {
   bg: "#0f1720", panel: "#161f2b", panel2: "#1d2836", line: "#2a3746",
@@ -102,6 +123,7 @@ export default function App() {
   const [erro, setErro] = useState(null);
   const [faseAberta, setFaseAberta] = useState(FASES[0].id);
   const [mostrarDocumentos, setMostrarDocumentos] = useState(false);
+  const [tarefasAbertas, setTarefasAbertas] = useState({});
   const [documentos, setDocumentos] = useState([]);
   const [novoDocNome, setNovoDocNome] = useState("");
   const [novoDocLink, setNovoDocLink] = useState("");
@@ -234,8 +256,13 @@ export default function App() {
   // Se completou todas, ele está em "concluído".
   const faseAtualDoAluno = (alunoId) => {
     for (const fase of FASES) {
-      const feitas = fase.tarefas.filter((t) => progresso[alunoId]?.has(t.id)).length;
-      if (feitas < fase.tarefas.length) return fase.id;
+      const total = contarItens(fase.tarefas);
+      let feitas = 0;
+      fase.tarefas.forEach((t) => {
+        if (progresso[alunoId]?.has(t.id)) feitas++;
+        (t.subtarefas || []).forEach((s) => { if (progresso[alunoId]?.has(s.id)) feitas++; });
+      });
+      if (feitas < total) return fase.id;
     }
     return "concluido";
   };
@@ -472,9 +499,14 @@ export default function App() {
               </div>
 
               {FASES.map((fase) => {
-                const feitasFase = fase.tarefas.filter((t) => progresso[selId]?.has(t.id)).length;
+                const totalFase = contarItens(fase.tarefas);
+                let feitasFase = 0;
+                fase.tarefas.forEach((t) => {
+                  if (progresso[selId]?.has(t.id)) feitasFase++;
+                  (t.subtarefas || []).forEach((s) => { if (progresso[selId]?.has(s.id)) feitasFase++; });
+                });
                 const aberta = faseAberta === fase.id;
-                const completa = feitasFase === fase.tarefas.length;
+                const completa = feitasFase === totalFase;
                 return (
                   <section key={fase.id} style={{ border: `1px solid ${C.line}`, borderRadius: 12, marginBottom: 14, overflow: "hidden", background: C.panel }}>
                     <button onClick={() => setFaseAberta(aberta ? null : fase.id)} style={{ width: "100%", background: "transparent", border: "none", color: C.ink, padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", textAlign: "left" }}>
@@ -483,7 +515,7 @@ export default function App() {
                         {fase.quando && <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>{fase.quando}</div>}
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, padding: "3px 9px", borderRadius: 20, background: completa ? C.greenSoft : C.goldSoft, color: completa ? C.green : C.gold }}>{feitasFase}/{fase.tarefas.length}</span>
+                        <span style={{ fontSize: 12, fontWeight: 600, padding: "3px 9px", borderRadius: 20, background: completa ? C.greenSoft : C.goldSoft, color: completa ? C.green : C.gold }}>{feitasFase}/{totalFase}</span>
                         <span style={{ color: C.sub, transform: aberta ? "rotate(90deg)" : "none", transition: "transform .15s", fontSize: 13 }}>▶</span>
                       </div>
                     </button>
@@ -491,16 +523,50 @@ export default function App() {
                       <div style={{ borderTop: `1px solid ${C.line}` }}>
                         {fase.tarefas.map((t) => {
                           const feita = !!progresso[selId]?.has(t.id);
+                          const temSubs = (t.subtarefas?.length || 0) > 0;
+                          const subsAbertas = !!tarefasAbertas[t.id];
+                          const subsFeitas = temSubs ? t.subtarefas.filter((s) => progresso[selId]?.has(s.id)).length : 0;
                           return (
-                            <div key={t.id} style={{ display: "flex", gap: 12, padding: "13px 18px", borderBottom: `1px solid ${C.panel2}`, alignItems: "flex-start" }}>
-                              <button onClick={() => toggle(t.id)} aria-label={feita ? "Desmarcar" : "Marcar como feita"}
-                                style={{ flexShrink: 0, width: 22, height: 22, borderRadius: 6, marginTop: 1, border: `2px solid ${feita ? C.green : C.line}`, background: feita ? C.green : "transparent", color: "#0f1720", display: "grid", placeItems: "center", fontSize: 13, fontWeight: 900 }}>
-                                {feita ? "✓" : ""}
-                              </button>
-                              <div style={{ flex: 1 }}>
-                                <span style={{ fontSize: 14, lineHeight: 1.5, color: feita ? C.sub : C.ink, textDecoration: feita ? "line-through" : "none" }}>{t.texto}</span>
-                                {t.link && <a href={t.link} target="_blank" rel="noopener noreferrer" className="lnk" style={{ display: "inline-block", marginLeft: 6, fontSize: 13 }}>👉 abrir link</a>}
+                            <div key={t.id} style={{ borderBottom: `1px solid ${C.panel2}` }}>
+                              <div style={{ display: "flex", gap: 12, padding: "13px 18px", alignItems: "flex-start" }}>
+                                <button onClick={() => toggle(t.id)} aria-label={feita ? "Desmarcar" : "Marcar como feita"}
+                                  style={{ flexShrink: 0, width: 22, height: 22, borderRadius: 6, marginTop: 1, border: `2px solid ${feita ? C.green : C.line}`, background: feita ? C.green : "transparent", color: "#0f1720", display: "grid", placeItems: "center", fontSize: 13, fontWeight: 900 }}>
+                                  {feita ? "✓" : ""}
+                                </button>
+                                <div style={{ flex: 1 }}>
+                                  <span style={{ fontSize: 14, lineHeight: 1.5, color: feita ? C.sub : C.ink, textDecoration: feita ? "line-through" : "none" }}>{t.texto}</span>
+                                  {t.link && <a href={t.link} target="_blank" rel="noopener noreferrer" className="lnk" style={{ display: "inline-block", marginLeft: 6, fontSize: 13 }}>👉 abrir link</a>}
+                                  {temSubs && (
+                                    <button
+                                      onClick={() => setTarefasAbertas((p) => ({ ...p, [t.id]: !p[t.id] }))}
+                                      style={{ display: "inline-flex", alignItems: "center", gap: 6, marginLeft: 8, background: "transparent", border: "none", color: C.gold, fontSize: 12.5, fontWeight: 600, padding: 0 }}
+                                    >
+                                      <span style={{ display: "inline-block", transform: subsAbertas ? "rotate(90deg)" : "none", transition: "transform .15s" }}>▶</span>
+                                      {subsFeitas}/{t.subtarefas.length} subtarefas
+                                    </button>
+                                  )}
+                                </div>
                               </div>
+
+                              {temSubs && subsAbertas && (
+                                <div style={{ paddingLeft: 34, paddingBottom: 6, borderLeft: `2px solid ${C.line}`, marginLeft: 28, marginBottom: 10 }}>
+                                  {t.subtarefas.map((s) => {
+                                    const subFeita = !!progresso[selId]?.has(s.id);
+                                    return (
+                                      <div key={s.id} style={{ display: "flex", gap: 10, padding: "8px 14px", alignItems: "flex-start" }}>
+                                        <button onClick={() => toggle(s.id)} aria-label={subFeita ? "Desmarcar" : "Marcar como feita"}
+                                          style={{ flexShrink: 0, width: 18, height: 18, borderRadius: 5, marginTop: 1, border: `2px solid ${subFeita ? C.green : C.line}`, background: subFeita ? C.green : "transparent", color: "#0f1720", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 900 }}>
+                                          {subFeita ? "✓" : ""}
+                                        </button>
+                                        <div style={{ flex: 1 }}>
+                                          <span style={{ fontSize: 13.5, lineHeight: 1.5, color: subFeita ? C.sub : C.ink, textDecoration: subFeita ? "line-through" : "none" }}>{s.texto}</span>
+                                          {s.link && <a href={s.link} target="_blank" rel="noopener noreferrer" className="lnk" style={{ display: "inline-block", marginLeft: 6, fontSize: 12.5 }}>👉 abrir link</a>}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
